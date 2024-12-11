@@ -1,231 +1,286 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Take a High Resolution Photo with WebRTC</title>
-  <style>
-  .home {
-    display: flex;
-    align-items: center;
-    flex-direction: column;
-  }
-  #hiddenCanvas {
-    display: none;
-  }
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Take a High Resolution Photo with WebRTC</title>
+    <style>
+      body {
+      }
 
-  .camera {
-    display: none;
-    max-width: 100%;
-  }
+      div.polaroid {
+        width: 80vw;
+        background-color: white;
+        box-shadow: 5px 7px 4px #888888;
+        margin-bottom: 25px;
+      }
 
-  #photoTaken {
-    max-width: 100%;
-  }
+      div.container {
+        text-align: center;
+        padding: 10px 20px;
+      }
 
-  #file {
-    display: none;
-  }
-  </style>
-</head>
-<body>
-  <div class="home">
-    <h2>Take a Photo</h2>
-    <label>
-      Camera:
-      <select id="cameraSelect"></select>
-    </label>
-    <br/>
-    <label>
-      Desired Resolution:
-      <select id="resolutionSelect">
-        <option value="640x480">640x480</option>
-        <option value="1280x720">1280x720</option>
-        <option value="1920x1080">1920x1080</option>
-        <option value="3840x2160">3840x2160</option>
-      </select>
-    </label>
-    <br/>
-    <div>
-      <button id="startCameraBtn">Start Camera</button>
-      <button id="takePhotoBtn">Take Photo</button>
-      <button id="loadFileBtn">
-        Load File
-      </button>
-      <input type="file" id="file" onchange="loadImageFromFile();" accept=".jpg,.jpeg,.png,.bmp" />
+      .home {
+        display: flex;
+        align-items: center;
+        flex-direction: column;
+      }
+      #hiddenCanvas {
+        display: none;
+      }
+
+      .camera {
+        max-width: 100%;
+        width: 90%;
+        margin: 1rem 1rem 4rem;
+      }
+
+      #photoTaken {
+        max-width: 100%;
+      }
+
+      #file {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="polaroid">
+      <div>
+        <video
+        class="camera"
+        muted
+        autoplay="autoplay"
+        playsinline="playsinline"
+        webkit-playsinline
+      ></video>
+      <br />
+      <div>
+        <button id="startCameraBtn">Start Camera</button>
+        <button id="takePhotoBtn">Take Photo</button>
+        <button id="loadFileBtn">Load File</button>
+        <input
+          type="file"
+          id="file"
+          onchange="loadImageFromFile();"
+          accept=".jpg,.jpeg,.png,.bmp"
+        />
+      </div>
+      <canvas id="hiddenCanvas"></canvas>
+      <img id="photoTaken" />
+      <div id="info"></div>
     </div>
-    <br/>
-    <video class="camera" muted autoplay="autoplay" playsinline="playsinline" webkit-playsinline></video>
-    <br/>
-    <canvas id="hiddenCanvas"></canvas>
-    <img id="photoTaken" />
-    <div id="info"></div>
-  </div>
-  <script>
-  const cameraSelect = document.getElementById("cameraSelect");
-  const resolutionSelect = document.getElementById("resolutionSelect");
-  const video = document.querySelector("video");
-  const canvas = document.getElementById("hiddenCanvas");
-  
-  document.getElementById("startCameraBtn").addEventListener('click', (event) => {
-    console.log("start camera");
-    let options = {};
-    if (cameraSelect.selectedIndex != -1) {
-      options.deviceId = cameraSelect.selectedOptions[0].value;
-    }
-    if (resolutionSelect.selectedIndex != -1) {
-      let width = parseInt(resolutionSelect.selectedOptions[0].value.split("x")[0]);
-      let height = parseInt(resolutionSelect.selectedOptions[0].value.split("x")[1]);
-      let res = {width:width,height:height};
-      options.desiredResolution = res;
-    }
-    play(options);
-  });
-  
-  document.getElementById("takePhotoBtn").addEventListener('click', async (event) => {
-    let src;
-    if (imageCapture) {
-      try {
-        let blob = await imageCapture.takePhoto();
-        src = URL.createObjectURL(blob);
-      }catch(e) {
-        src = captureFrame();
-      }
-    }else{
-      src = captureFrame();
-    }
-    document.getElementById("photoTaken").src = src;
-  });
-  
-  document.getElementById("loadFileBtn").addEventListener('click', async (event) => {
-    document.getElementById("file").click();
-  });
-  
+      <div class="container">
+        <p>Cinque Terre</p>
+      </div>
+    </div>
 
-  document.getElementById("photoTaken").onload = function(){
-    let img = document.getElementById("photoTaken");
-    document.getElementById("info").innerText = "Image Width: " + img.naturalWidth +"\nImage Height: " + img.naturalHeight;
-  }
+    <div class="home">
+      <h2>Take a Photo</h2>
+      <label>
+        Camera:
+        <select id="cameraSelect"></select>
+      </label>
+      <br />
+      <label>
+        Desired Resolution:
+        <select id="resolutionSelect">
+          <option value="640x480">640x480</option>
+          <option value="1280x720">1280x720</option>
+          <option value="1920x1080">1920x1080</option>
+          <option value="3840x2160">3840x2160</option>
+        </select>
+      </label>
+      <br />
 
-  let imageCapture;
-  let localStream;
-  let cameraDevices = [];
-  window.onload = async function() {
-    await requestCameraPermission();
-    await loadCameraDevices();
-    loadCameraDevicesToSelect();
-  }
-  
-  async function loadCameraDevices(){
-    const constraints = {video: true, audio: false};
-    const stream = await navigator.mediaDevices.getUserMedia(constraints);
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    for (let i=0;i<devices.length;i++){
-      let device = devices[i];
-      if (device.kind == 'videoinput'){ // filter out audio devices
-        cameraDevices.push(device);
-      }
-    }
-    const tracks = stream.getTracks(); // stop the camera to avoid the NotReadableError
-    for (let i=0;i<tracks.length;i++) {
-      const track = tracks[i];
-      track.stop();
-    }
-  }
-  
-  function loadCameraDevicesToSelect(){
-    for (let i=0;i<cameraDevices.length;i++){
-      let device = cameraDevices[i];
-      cameraSelect.appendChild(new Option(device.label,device.deviceId))
-    }
-  }
-  
-  
-  async function requestCameraPermission() {
-    const constraints = {video: true, audio: false};
-    const stream = await navigator.mediaDevices.getUserMedia(constraints);
-    const tracks = stream.getTracks();
-    for (let i=0;i<tracks.length;i++) {
-      const track = tracks[i];
-      track.stop();  // stop the opened camera
-    }
-  }
-  
-  function play(options) {
-    stop(); // close before play
-    video.style.display = "block";
-    let constraints = {};
-  
-    if (options.deviceId){
-      constraints = {
-        video: {deviceId: options.deviceId},
-        audio: false
-      }
-    }else{
-      constraints = {
-        video: {width:1280, height:720,facingMode: { exact: "environment" }},
-        audio: false
-      }
-    }
+      <br />
 
-    if (options.desiredResolution) {
-      constraints["video"]["width"] = options.desiredResolution.width;
-      constraints["video"]["height"] = options.desiredResolution.height;
-    }
+      
+    <script>
+      const cameraSelect = document.getElementById("cameraSelect");
 
-    navigator.mediaDevices.getUserMedia(constraints).then(function(stream) {
-      localStream = stream;
-      // Attach local stream to video element      
-      video.srcObject = stream;
-      if ("ImageCapture" in window) {
-        const track = localStream.getVideoTracks()[0];
-        imageCapture = new ImageCapture(track);
-      }
-    }).catch(function(err) {
-      console.error('getUserMediaError', err, err.stack);
-    });
-  }
-  
-  function stop() {
-    try{
-      if (localStream){
-        const tracks = localStream.getTracks();
-        for (let i=0;i<tracks.length;i++) {
+      const video = document.querySelector("video");
+      const canvas = document.getElementById("hiddenCanvas");
+      let res = { width: 1920, height: 1080 };
+      document
+        .getElementById("startCameraBtn")
+        .addEventListener("click", (event) => {
+          console.log("start camera");
+          let options = {};
+          if (cameraSelect.selectedIndex != -1) {
+            options.deviceId = cameraSelect.selectedOptions[0].value;
+          }
+          if (resolutionSelect.selectedIndex != -1) {
+            let width = parseInt(
+              resolutionSelect.selectedOptions[0].value.split("x")[0]
+            );
+            let height = parseInt(
+              resolutionSelect.selectedOptions[0].value.split("x")[1]
+            );
+
+            options.desiredResolution = res;
+          }
+          play(options);
+        });
+
+      document
+        .getElementById("takePhotoBtn")
+        .addEventListener("click", async (event) => {
+          let src;
+          if (imageCapture) {
+            try {
+              let blob = await imageCapture.takePhoto();
+              src = URL.createObjectURL(blob);
+            } catch (e) {
+              src = captureFrame();
+            }
+          } else {
+            src = captureFrame();
+          }
+          document.getElementById("photoTaken").src = src;
+        });
+
+      document
+        .getElementById("loadFileBtn")
+        .addEventListener("click", async (event) => {
+          document.getElementById("file").click();
+        });
+
+      document.getElementById("photoTaken").onload = function () {
+        let img = document.getElementById("photoTaken");
+        document.getElementById("info").innerText =
+          "Image Width: " +
+          img.naturalWidth +
+          "\nImage Height: " +
+          img.naturalHeight;
+      };
+
+      let imageCapture;
+      let localStream;
+      let cameraDevices = [];
+      window.onload = async function () {
+        await requestCameraPermission();
+        await loadCameraDevices();
+        loadCameraDevicesToSelect();
+      };
+
+      async function loadCameraDevices() {
+        const constraints = { video: true, audio: false };
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        for (let i = 0; i < devices.length; i++) {
+          let device = devices[i];
+          if (device.kind == "videoinput") {
+            // filter out audio devices
+            cameraDevices.push(device);
+          }
+        }
+        const tracks = stream.getTracks(); // stop the camera to avoid the NotReadableError
+        for (let i = 0; i < tracks.length; i++) {
           const track = tracks[i];
           track.stop();
         }
       }
-    } catch (e){
-      alert(e.message);
-    }
-  };
-  
-  function captureFrame(){
-    let w = video.videoWidth;
-    let h = video.videoHeight;
-    canvas.width  = w;
-    canvas.height = h;
-    let ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0, w, h);
-    return canvas.toDataURL("image/jpeg")
-  }
 
-  function loadImageFromFile(){
-    let fileInput = document.getElementById("file");
-    let files = fileInput.files;
-    if (files.length == 0) {
-      return;
-    }
-    let file = files[0];
-    fileReader = new FileReader();
-    fileReader.onload = function(e){
-      document.getElementById("photoTaken").src = e.target.result;
-    };
-    fileReader.onerror = function () {
-      console.warn('oops, something went wrong.');
-    };
-    fileReader.readAsDataURL(file);
-  }
-  </script>
-</body>
+      function loadCameraDevicesToSelect() {
+        for (let i = 0; i < cameraDevices.length; i++) {
+          let device = cameraDevices[i];
+          cameraSelect.appendChild(new Option(device.label, device.deviceId));
+        }
+      }
+
+      async function requestCameraPermission() {
+        const constraints = { video: true, audio: false };
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        const tracks = stream.getTracks();
+        for (let i = 0; i < tracks.length; i++) {
+          const track = tracks[i];
+          track.stop(); // stop the opened camera
+        }
+      }
+
+      function play(options) {
+        stop(); // close before play
+        video.style.display = "block";
+        let constraints = {};
+
+        if (options.deviceId) {
+          constraints = {
+            video: { deviceId: options.deviceId },
+            audio: false,
+          };
+        } else {
+          constraints = {
+            video: {
+              width: 1280,
+              height: 720,
+              facingMode: { exact: "environment" },
+            },
+            audio: false,
+          };
+        }
+
+        if (options.desiredResolution) {
+          constraints["video"]["width"] = options.desiredResolution.width;
+          constraints["video"]["height"] = options.desiredResolution.height;
+        }
+
+        navigator.mediaDevices
+          .getUserMedia(constraints)
+          .then(function (stream) {
+            localStream = stream;
+            // Attach local stream to video element
+            video.srcObject = stream;
+            if ("ImageCapture" in window) {
+              const track = localStream.getVideoTracks()[0];
+              imageCapture = new ImageCapture(track);
+            }
+          })
+          .catch(function (err) {
+            console.error("getUserMediaError", err, err.stack);
+          });
+      }
+
+      function stop() {
+        try {
+          if (localStream) {
+            const tracks = localStream.getTracks();
+            for (let i = 0; i < tracks.length; i++) {
+              const track = tracks[i];
+              track.stop();
+            }
+          }
+        } catch (e) {
+          alert(e.message);
+        }
+      }
+
+      function captureFrame() {
+        let w = video.videoWidth;
+        let h = video.videoHeight;
+        canvas.width = w;
+        canvas.height = h;
+        let ctx = canvas.getContext("2d");
+        ctx.drawImage(video, 0, 0, w, h);
+        return canvas.toDataURL("image/jpeg");
+      }
+
+      function loadImageFromFile() {
+        let fileInput = document.getElementById("file");
+        let files = fileInput.files;
+        if (files.length == 0) {
+          return;
+        }
+        let file = files[0];
+        fileReader = new FileReader();
+        fileReader.onload = function (e) {
+          document.getElementById("photoTaken").src = e.target.result;
+        };
+        fileReader.onerror = function () {
+          console.warn("oops, something went wrong.");
+        };
+        fileReader.readAsDataURL(file);
+      }
+    </script>
+  </body>
 </html>
